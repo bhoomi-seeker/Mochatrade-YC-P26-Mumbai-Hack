@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FraudNexus — Explainable Fraud Risk Intelligence Engine</title>
+  <style>
+    :root {
+      --bg-main: #090D16;
+      --bg-surface: #0F172A;
+      --bg-card: #141E33;
+      --bg-card-hover: #1B2945;
+      --border-dim: #1E293B;
+      --border-bright: #334155;
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      
+      --critical: #EF4444;
+      --critical-bg: rgba(239, 68, 68, 0.12);
+      --critical-border: rgba(239, 68, 68, 0.35);
+
+      --high: #F97316;
+      --high-bg: rgba(249, 115, 22, 0.12);
+      --high-border: rgba(249, 115, 22, 0.35);
+
+      --medium: #F59E0B;
+      --medium-bg: rgba(245, 158, 11, 0.12);
+      --medium-border: rgba(245, 158, 11, 0.35);
+
+      --low: #10B981;
+      --low-bg: rgba(16, 185, 129, 0.12);
+      --low-border: rgba(16, 185, 129, 0.35);
+
+      --accent: #3B82F6;
+      --accent-glow: rgba(59, 130, 246, 0.25);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Code", monospace; }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding-bottom: 60px;
+      overflow-x: hidden;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-dim);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #1E3A8A, #0284C7);
+      border: 1px solid #38BDF8;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.3);
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-tag {
+      font-size: 0.7rem;
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38BDF8;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .case-selector {
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border-bright);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: #64748B;
+    }
+
+    .btn-primary {
+      background: #2563EB;
+      border-color: #3B82F6;
+      color: #FFFFFF;
+    }
+
+    .btn-primary:hover {
+      background: #1D4ED8;
+    }
+
+    .btn-critical {
+      background: #DC2626;
+      border-color: #EF4444;
+      color: #FFFFFF;
+    }
+
+    .btn-critical:hover {
+      background: #B91C1C;
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1360px;
+      margin: 24px auto;
+      padding: 0 24px;
+    }
+
+    /* Banner / Headline */
+    .hero-banner {
+      background: linear-gradient(180deg, rgba(20, 30, 51, 0.7) 0%, rgba(15, 23, 42, 0.4) 100%);
+      border: 1px solid var(--border-dim);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      gap: 28px;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-banner::before {
+      content: "";
+      position: absolute;
+      top: -50px;
+      right: -50px;
+      width: 250px;
+      height: 250px;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Score Gauge Widget */
+    .gauge-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .gauge-svg {
+      transform: rotate(-90deg);
+      width: 190px;
+      height: 190px;
+    }
+
+    .gauge-bg {
+      fill: none;
+      stroke: #1E293B;
+      stroke-width: 14;
+    }
+
+    .gauge-progress {
+      fill: none;
+      stroke-width: 14;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.4s ease;
+    }
+
+    .gauge-content {
+      position: absolute;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gauge-number {
+      font-size: 3.2rem;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -1px;
+    }
+
+    .gauge-max {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .severity-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-weight: 800;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: 0 0 12px rgba(0,0,0,0.4);
+    }
+
+    /* Hero Text & Case Meta */
+    .hero-info h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .meta-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0 16px 0;
+    }
+
+    .meta-pill {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid var(--border-dim);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .meta-pill strong {
+      color: var(--text-main);
+    }
+
+    .narrative-box {
+      background: rgba(15, 23, 42, 0.7);
+      border-left: 3px solid #EF4444;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      color: #CBD5E1;
+    }
+
+    /* Live Tweak Panel (Demo Wow Factor) */
+    .hero-controls {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border-bright);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .hero-controls h3 {
+      font-size: 0.82rem;
+      color: #38BDF8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tweak-btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tweak-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      color: var(--text-muted);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.15s ease;
+    }
+
+    .tweak-btn:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+      border-color: #475569;
+    }
+
+    .tweak-btn.active {
+      border-color: #38BDF8;
+      background: rgba(56, 189, 248, 0.1);
+      color: #38BDF8;
+    }
+
+    /* Two-Column Grid */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 480px;
+      gap: 24px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-dim);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-dim);
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-subtitle {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    /* Primary Risk Drivers (Level 2: Why This Score) */
+    .drivers-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .driver-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px;
+      align-items: center;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .driver-item:hover {
+      border-color: var(--border-bright);
+      transform: translateX(4px);
+    }
+
+    .driver-rank {
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: var(--text-dim);
+      width: 24px;
+    }
+
+    .driver-info h4 {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #F1F5F9;
+      margin-bottom: 3px;
+    }
+
+    .driver-info p {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .driver-points {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #EF4444;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 4px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* Contribution Progress Bars (Level 3) */
+    .bars-container {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .bar-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.83rem;
+    }
+
+    .bar-labels span:first-child {
+      font-weight: 600;
+      color: #E2E8F0;
+    }
+
+    .bar-labels span:last-child {
+      font-weight: 700;
+      color: #94A3B8;
+    }
+
+    .bar-track {
+      height: 9px;
+      background: #1E293B;
+      border-radius: 9999px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 9999px;
+      transition: width 0.8s ease;
+    }
+
+    /* Expandable Evidence Cards (Level 4) */
+    .signals-accordion {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .signal-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 0.2s ease;
+    }
+
+    .signal-card.triggered {
+      border-left: 4px solid #EF4444;
+    }
+
+    .signal-card.not-triggered {
+      border-left: 4px solid #64748B;
+      opacity: 0.75;
+    }
+
+    .signal-card.unassessable {
+      border-left: 4px solid #F59E0B;
+    }
+
+    .signal-header {
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .signal-title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .signal-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    .signal-status-pill {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .signal-body {
+      padding: 0 16px 16px 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      display: none;
+    }
+
+    .signal-body.open {
+      display: block;
+      margin-top: 10px;
+    }
+
+    .evidence-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin: 12px 0;
+      background: rgba(15, 23, 42, 0.5);
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    .evidence-item {
+      font-size: 0.78rem;
+    }
+
+    .evidence-item label {
+      display: block;
+      color: var(--text-dim);
+      margin-bottom: 2px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+    }
+
+    .evidence-item span {
+      color: #F8FAFC;
+      font-weight: 600;
+    }
+
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .tag-badge {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--border-bright);
+      color: #38BDF8;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: monospace;
+    }
+
+    /* Contributing Entities Matrix (Level 5) */
+    .entity-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .entity-tile {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+
+    .entity-tile:hover {
+      border-color: #38BDF8;
+      background: var(--bg-card-hover);
+    }
+
+    .entity-tile label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .entity-tile .value {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #F8FAFC;
+      word-break: break-all;
+    }
+
+    .entity-tile .sub {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+    }
+
+    /* Actions Matrix (Level 6) */
+    .action-tiles {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .action-tile {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .action-tile:hover {
+      border-color: #3B82F6;
+      transform: translateY(-2px);
+    }
+
+    .action-tile strong {
+      font-size: 0.85rem;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .action-tile span {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      line-height: 1.3;
+    }
+
+    /* Tabs Bar for Visualizers */
+    .viz-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-dim);
+      padding-bottom: 8px;
+    }
+
+    .viz-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .viz-tab:hover {
+      color: #FFFFFF;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .viz-tab.active {
+      color: #38BDF8;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .viz-view {
+      display: none;
+    }
+
+    .viz-view.active {
+      display: block;
+    }
+
+    /* Network Graph Canvas */
+    .graph-svg-box {
+      width: 100%;
+      height: 380px;
+      background: #0B1120;
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Money Flow Visualizer */
+    .money-flow-track {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .flow-hop {
+      display: grid;
+      grid-template-columns: 180px 80px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      padding: 12px 16px;
+      border-radius: 8px;
+    }
+
+    .flow-entity {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #E2E8F0;
+    }
+
+    .flow-arrow {
+      text-align: center;
+      color: #EF4444;
+      font-weight: 900;
+    }
+
+    .flow-amount {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #F87171;
+    }
+
+    .flow-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(239, 68, 68, 0.15);
+      color: #F87171;
+      font-weight: 700;
+    }
+
+    /* Timeline Visualizer */
+    .timeline-list {
+      position: relative;
+      padding-left: 24px;
+    }
+
+    .timeline-list::before {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 10px;
+      bottom: 10px;
+      width: 2px;
+      background: var(--border-bright);
+    }
+
+    .timeline-node {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -24px;
+      top: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--bg-main);
+      border: 2px solid #38BDF8;
+    }
+
+    .timeline-dot.critical { border-color: #EF4444; background: #EF4444; box-shadow: 0 0 8px #EF4444; }
+    .timeline-dot.high { border-color: #F97316; background: #F97316; }
+
+    .timeline-time {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-family: monospace;
+      font-weight: 700;
+    }
+
+    .timeline-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 2px 0;
+    }
+
+    .timeline-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Modal (Evidence Pack) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: #0F172A;
+      border: 1px solid var(--border-bright);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 780px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 28px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    }
+
+    .dossier-header {
+      border-bottom: 2px solid #EF4444;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .dossier-seal {
+      font-size: 0.7rem;
+      color: #EF4444;
+      border: 1px solid #EF4444;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .dossier-hash {
+      background: #090D16;
+      border: 1px solid var(--border-dim);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #38BDF8;
+      word-break: break-all;
+      margin-top: 16px;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero-banner { grid-template-columns: 1fr; }
+      .content-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">
+          FRAUDNEXUS
+          <span class="brand-tag">EXPLAINABLE RISK ENGINE v1.0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <label style="font-size: 0.8rem; color: var(--text-dim); font-weight: 600;">BENCHMARK SCENARIO:</label>
+      <select id="case-select" class="case-selector" onchange="switchTransaction(this.value)">
+        <option value="TXN-48291">TXN-48291 — Mumbai Mule Syndicate (CRITICAL: 94)</option>
+        <option value="TXN-LOW-001">TXN-LOW-001 — Clean Salary Transfer (LOW: 10)</option>
+        <option value="TXN-MED-002">TXN-MED-002 — E-Commerce Anomaly (MEDIUM: 59)</option>
+        <option value="TXN-HIGH-003">TXN-HIGH-003 — Device Cluster Ring (HIGH: 69)</option>
+        <option value="TXN-MISSING-004">TXN-MISSING-004 — ATM Cash-In (NOT ASSESSABLE)</option>
+      </select>
+
+      <button class="btn btn-primary" onclick="recalculateCurrent()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        Recalculate
+      </button>
+
+      <button class="btn" onclick="openEvidencePack()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Evidence Dossier
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- LEVEL 1: HERO ASSESSMENT BANNER -->
+    <section class="hero-banner">
+      <!-- Animated Gauge -->
+      <div class="gauge-wrapper">
+        <svg class="gauge-svg" viewBox="0 0 160 160">
+          <circle class="gauge-bg" cx="80" cy="80" r="66" />
+          <circle id="gauge-arc" class="gauge-progress" cx="80" cy="80" r="66"
+                  stroke-dasharray="414.69" stroke-dashoffset="414.69" stroke="#EF4444" />
+        </svg>
+        <div class="gauge-content">
+          <div id="score-num" class="gauge-number" style="color: #EF4444;">0</div>
+          <div class="gauge-max">/ 100 RISK SCORE</div>
+          <div id="severity-badge" class="severity-badge" style="background: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical-border);">
+            CRITICAL
+          </div>
+        </div>
+      </div>
+
+      <!-- Transaction Narrative & Meta -->
+      <div class="hero-info">
+        <h1 id="txn-header-title">
+          <span id="txn-id-label">TXN-48291</span>
+          <span id="confidence-pill" style="font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #60A5FA; font-weight: 700;">
+            CONFIDENCE: HIGH
+          </span>
+        </h1>
+        
+        <div class="meta-pills">
+          <div class="meta-pill">Amount: <strong id="meta-amount">₹48,500.00</strong></div>
+          <div class="meta-pill">Rail: <strong>UPI Real-Time</strong></div>
+          <div class="meta-pill">Case: <strong id="meta-case">CASE-2026-018</strong></div>
+          <div class="meta-pill">Audit ID: <strong id="meta-audit" style="font-family: monospace;">RISK-2026-8D5786</strong></div>
+        </div>
+
+        <div class="narrative-box" id="narrative-text">
+          Evaluating evidence across hardware multi-tenancy, transaction velocity, payment graph clustering, and historical cybercrime intelligence...
+        </div>
+      </div>
+
+      <!-- Live Judge Tweak Sandbox (Demonstrates Dynamic Engine) -->
+      <div class="hero-controls">
+        <h3>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Judge "What-If" Sandbox
+        </h3>
+        <p style="font-size: 0.72rem; color: var(--text-dim); line-height: 1.2;">
+          Click to mutate actual database evidence and observe dynamic score recalibration:
+        </p>
+        <div class="tweak-btn-group">
+          <button id="btn-tweak-dev" class="tweak-btn" onclick="executeTweak('unlink_device', 'relink_device', this)">
+            <span>Unlink 4 Accounts from DEV-204</span>
+            <strong style="color: #F87171;">-20 pts</strong>
+          </button>
+          <button id="btn-tweak-fraud" class="tweak-btn" onclick="executeTweak('clear_fraud_links', 'restore_fraud_links', this)">
+            <span>Clear FIR 402/2026 Record</span>
+            <strong style="color: #F87171;">-25 pts</strong>
+          </button>
+          <button id="btn-tweak-vel" class="tweak-btn" onclick="executeTweak('normalize_velocity', 'restore_velocity', this)">
+            <span>Normalize 2-Hour Velocity</span>
+            <strong style="color: #F87171;">-18 pts</strong>
+          </button>
+          <button class="tweak-btn" style="border-color: #38BDF8; color: #38BDF8; justify-content: center; font-weight: 700;" onclick="resetDemoState()">
+            Reset All Evidence to Benchmark (94)
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTENT TWO-COLUMN GRID -->
+    <div class="content-grid">
+
+      <!-- LEFT COLUMN: Explainability, Signals & Visual Investigation -->
+      <div>
+        
+        <!-- LEVEL 2: WHY THIS SCORE? -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                WHY THIS SCORE?
+              </div>
+              <div class="card-subtitle">Primary Risk Drivers evaluated from observable entity relationships</div>
+            </div>
+            <span style="font-size: 0.75rem; color: #94A3B8; font-weight: 600;">Weighted Convergence Model</span>
+          </div>
+
+          <div id="drivers-container" class="drivers-list">
+            <!-- Dynamically populated top 3 drivers -->
+          </div>
+        </section>
+
+        <!-- LEVEL 4: INTERACTIVE EXPANDABLE SIGNAL EVIDENCE -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                INDEPENDENT SIGNAL EVIDENCE CARDS
+              </div>
+              <div class="card-subtitle">Every score point is backed by verifiable telemetry and graph links</div>
+            </div>
+            <span style="font-size: 0.75rem; color: var(--text-dim);">Click card to inspect evidence</span>
+          </div>
+
+          <div id="signals-container" class="signals-accordion">
+            <!-- Dynamically populated 6 signal cards -->
+          </div>
+        </section>
+
+        <!-- LEVEL 5 & 6: VISUAL INVESTIGATION (NETWORK / MONEY FLOW / TIMELINE) -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                DEEP INVESTIGATION MODULE
+              </div>
+              <div class="card-subtitle">Cross-examine connected hardware, multi-hop money flow, and chronological trail</div>
+            </div>
+          </div>
+
+          <div class="viz-tabs">
+            <button class="viz-tab active" onclick="switchTab('network', this)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+              View in Network
+            </button>
+            <button class="viz-tab" onclick="switchTab('money-flow', this)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Trace Money Flow
+            </button>
+            <button class="viz-tab" onclick="switchTab('timeline', this)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Investigation Timeline
+            </button>
+          </div>
+
+          <!-- Network Graph View -->
+          <div id="tab-network" class="viz-view active">
+            <div class="graph-svg-box" id="graph-container">
+              <!-- Interactive SVG Graph rendered here -->
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 8px; display: flex; justify-content: space-between;">
+              <span>Legend: <span style="color: #F97316;">■ Device Hardware</span> | <span style="color: #EF4444;">■ Mule Account</span> | <span style="color: #DC2626;">■ Law Enforcement Dossier</span></span>
+              <span id="graph-meta-label">10 Nodes Connected</span>
+            </div>
+          </div>
+
+          <!-- Money Flow View -->
+          <div id="tab-money-flow" class="viz-view">
+            <div id="money-flow-container" class="money-flow-track">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Timeline View -->
+          <div id="tab-timeline" class="viz-view">
+            <div id="timeline-container" class="timeline-list">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+        </section>
+
+      </div>
+
+      <!-- RIGHT COLUMN: Risk Contribution Breakdown, Entities & Actions -->
+      <div>
+
+        <!-- LEVEL 3: RISK CONTRIBUTION BREAKDOWN BARS -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                RISK CONTRIBUTION BREAKDOWN
+              </div>
+              <div class="card-subtitle">Exact point contribution vs maximum signal weights</div>
+            </div>
+          </div>
+
+          <div id="bars-container" class="bars-container">
+            <!-- Dynamically populated stacked bars -->
+          </div>
+        </section>
+
+        <!-- LEVEL 5: CONTRIBUTING ENTITIES MATRIX -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                ENTITIES CONTRIBUTING TO RISK
+              </div>
+              <div class="card-subtitle">Click entity to cross-filter in investigation graph</div>
+            </div>
+          </div>
+
+          <div id="entities-container" class="entity-grid">
+            <!-- Dynamically populated entity tiles -->
+          </div>
+        </section>
+
+        <!-- LEVEL 6: RECOMMENDED INVESTIGATOR ACTIONS -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                RECOMMENDED NEXT STEPS
+              </div>
+              <div class="card-subtitle">Actionable workflow prescribed by Risk Engine v1.0</div>
+            </div>
+          </div>
+
+          <div id="actions-container" class="action-tiles">
+            <!-- Dynamically populated action cards -->
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- FORMAL EVIDENCE DOSSIER MODAL -->
+  <div id="evidence-modal" class="modal-backdrop" onclick="if(event.target===this) closeEvidencePack()">
+    <div class="modal-card">
+      <div class="dossier-header">
+        <div>
+          <h2 style="color: #FFFFFF; font-size: 1.3rem; margin-bottom: 4px;">FRAUDNEXUS EVIDENCE DOSSIER</h2>
+          <p style="font-size: 0.8rem; color: var(--text-dim);">OFFICIAL INTELLIGENCE REPORT FOR CYBER CELL INVESTIGATION</p>
+        </div>
+        <div class="dossier-seal">OFFICIALLY SEALED</div>
+      </div>
+
+      <div id="dossier-content">
+        <!-- Injected dynamically -->
+      </div>
+
+      <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+        <button class="btn" onclick="window.print()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Print / Save PDF
+        </button>
+        <button class="btn btn-primary" onclick="closeEvidencePack()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let currentTxnId = "TXN-48291";
+    let assessmentData = null;
+    let tweakStates = {
+      unlink_device: false,
+      clear_fraud_links: false,
+      normalize_velocity: false
+    };
+
+    const API_BASE = window.location.origin.includes("http") ? "" : "http://localhost:8000";
+
+    async function fetchAssessment(txnId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/risk-score/${txnId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        assessmentData = data;
+        renderAssessment(data);
+      } catch (err) {
+        console.error("Failed to fetch risk assessment:", err);
+      }
+    }
+
+    function renderAssessment(data) {
+      // 1. Animate Gauge
+      const score = data.score;
+      const arc = document.getElementById("gauge-arc");
+      const numElem = document.getElementById("score-num");
+      const sevBadge = document.getElementById("severity-badge");
+
+      // Arc circumference: 2 * Math.PI * 66 = 414.69
+      const totalCircumference = 414.69;
+      const offset = totalCircumference - (totalCircumference * (score / 100));
+
+      let strokeColor = "#10B981"; // Low
+      let sevBg = "var(--low-bg)";
+      let sevBorder = "var(--low-border)";
+      if (data.severity === "CRITICAL") {
+        strokeColor = "#EF4444";
+        sevBg = "var(--critical-bg)";
+        sevBorder = "var(--critical-border)";
+      } else if (data.severity === "HIGH") {
+        strokeColor = "#F97316";
+        sevBg = "var(--high-bg)";
+        sevBorder = "var(--high-border)";
+      } else if (data.severity === "MEDIUM") {
+        strokeColor = "#F59E0B";
+        sevBg = "var(--medium-bg)";
+        sevBorder = "var(--medium-border)";
+      }
+
+      arc.style.stroke = strokeColor;
+      arc.style.strokeDashoffset = offset;
+      sevBadge.style.color = strokeColor;
+      sevBadge.style.background = sevBg;
+      sevBadge.style.borderColor = sevBorder;
+      sevBadge.innerText = data.severity;
+      numElem.style.color = strokeColor;
+
+      // Animate counter from 0 to score
+      animateCounter(numElem, score);
+
+      // Meta labels
+      document.getElementById("txn-id-label").innerText = data.transaction_id;
+      document.getElementById("meta-audit").innerText = data.assessment_id;
+      document.getElementById("narrative-text").innerText = data.executive_summary;
+      document.getElementById("confidence-pill").innerText = `CONFIDENCE: ${data.confidence}`;
+
+      // 2. Primary Risk Drivers (Level 2)
+      const driversContainer = document.getElementById("drivers-container");
+      driversContainer.innerHTML = "";
+
+      if (data.primary_risk_drivers && data.primary_risk_drivers.length > 0) {
+        data.primary_risk_drivers.forEach((d, idx) => {
+          const item = document.createElement("div");
+          item.className = "driver-item";
+          item.innerHTML = `
+            <div class="driver-rank">#${idx + 1}</div>
+            <div class="driver-info">
+              <h4>${d.name}</h4>
+              <p>${d.summary}</p>
+            </div>
+            <div class="driver-points">+${d.contribution} pts</div>
+          `;
+          driversContainer.appendChild(item);
+        });
+      } else {
+        driversContainer.innerHTML = `<div style="padding: 12px; color: var(--text-dim);">No elevated risk drivers detected. Baseline parameters satisfied.</div>`;
+      }
+
+      // 3. Contribution Progress Bars (Level 3)
+      const barsContainer = document.getElementById("bars-container");
+      barsContainer.innerHTML = "";
+      const maxWeights = {
+        PREVIOUS_FRAUD: 25,
+        SHARED_DEVICE: 20,
+        VELOCITY_SURGE: 18,
+        LINKED_ACCOUNTS: 16,
+        COMMON_BENEFICIARY: 10,
+        AMOUNT_ANOMALY: 5
+      };
+
+      data.signals.forEach(s => {
+        const maxW = maxWeights[s.signal_id] || 20;
+        const pct = Math.round((s.contribution / maxW) * 100);
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        
+        let color = "#3B82F6";
+        if (s.contribution >= 20) color = "#EF4444";
+        else if (s.contribution >= 15) color = "#F97316";
+        else if (s.contribution >= 10) color = "#F59E0B";
+
+        row.innerHTML = `
+          <div class="bar-labels">
+            <span>${s.name}</span>
+            <span>+${s.contribution} / ${maxW} pts</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: ${s.triggered ? pct : 0}%; background: ${color};"></div>
+          </div>
+        `;
+        barsContainer.appendChild(row);
+      });
+
+      // 4. Expandable Signal Cards (Level 4)
+      const signalsContainer = document.getElementById("signals-container");
+      signalsContainer.innerHTML = "";
+      data.signals.forEach(s => {
+        const card = document.createElement("div");
+        const statusClass = !s.assessable ? "unassessable" : (s.triggered ? "triggered" : "not-triggered");
+        card.className = `signal-card ${statusClass}`;
+
+        let statusText = s.triggered ? `+${s.contribution} PTS` : "CLEAN";
+        let statusBg = s.triggered ? "rgba(239, 68, 68, 0.15)" : "rgba(100, 116, 139, 0.2)";
+        let statusColor = s.triggered ? "#EF4444" : "#94A3B8";
+
+        if (!s.assessable) {
+          statusText = "NOT ASSESSABLE";
+          statusBg = "rgba(245, 158, 11, 0.15)";
+          statusColor = "#F59E0B";
+        }
+
+        const tagsHtml = (s.related_entities || []).map(e => `<span class="tag-badge" onclick="event.stopPropagation(); filterEntity('${e}')">${e}</span>`).join("");
+        const evidenceLines = (s.evidence || []).map(ev => `<div style="font-size: 0.78rem; color: #CBD5E1; margin-bottom: 2px;">• ${ev}</div>`).join("");
+
+        card.innerHTML = `
+          <div class="signal-header" onclick="toggleSignalCard(this)">
+            <div class="signal-title-group">
+              <span class="signal-name">${s.name}</span>
+              <span class="signal-status-pill" style="background: ${statusBg}; color: ${statusColor};">${statusText}</span>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="signal-body ${s.triggered ? 'open' : ''}">
+            <p style="margin-bottom: 8px; color: #F1F5F9; font-weight: 500;">${s.explanation}</p>
+            <div class="evidence-grid">
+              <div class="evidence-item">
+                <label>Observed Metric</label>
+                <span>${s.observed_value} ${s.unit || ''}</span>
+              </div>
+              <div class="evidence-item">
+                <label>Configured Threshold</label>
+                <span>${s.threshold} ${s.unit || ''}</span>
+              </div>
+            </div>
+            <div style="margin-top: 8px;">
+              <label style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Direct Telemetry Evidence:</label>
+              ${evidenceLines || '<div style="font-size: 0.78rem; color: var(--text-dim);">No suspicious artifacts logged.</div>'}
+            </div>
+            ${tagsHtml ? `
+              <div style="margin-top: 10px;">
+                <label style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Participating Entities in Graph:</label>
+                <div class="tags-container">${tagsHtml}</div>
+              </div>` : ''}
+            <div style="margin-top: 12px; display: flex; gap: 8px;">
+              <button class="btn" style="font-size: 0.75rem; padding: 4px 10px;" onclick="switchTab('network'); highlightNode('${s.related_entities?.[0] || 'DEV-204'}')">
+                View in Network Graph
+              </button>
+            </div>
+          </div>
+        `;
+        signalsContainer.appendChild(card);
+      });
+
+      // 5. Entities Matrix (Level 5)
+      const ent = data.related_entities;
+      const entContainer = document.getElementById("entities-container");
+      entContainer.innerHTML = `
+        <div class="entity-tile" onclick="switchTab('network'); highlightNode('${ent.account}')">
+          <label>Subject Account</label>
+          <div class="value">${ent.account}</div>
+          <div class="sub">${ent.holder_name}</div>
+        </div>
+        <div class="entity-tile" onclick="switchTab('network'); highlightNode('${ent.device}')">
+          <label>Hardware Fingerprint</label>
+          <div class="value">${ent.device}</div>
+          <div class="sub">Android 14 (SM-A546B)</div>
+        </div>
+        <div class="entity-tile" onclick="switchTab('network'); highlightNode('${ent.upi}')">
+          <label>Destination VPA / UPI</label>
+          <div class="value">${ent.upi}</div>
+          <div class="sub">Laundering Funnel Hub</div>
+        </div>
+        <div class="entity-tile" onclick="switchTab('network'); highlightNode('${ent.beneficiary}')">
+          <label>Beneficiary Entity</label>
+          <div class="value">${ent.beneficiary}</div>
+          <div class="sub">Cyber Shell Pvt Ltd</div>
+        </div>
+        <div class="entity-tile">
+          <label>Linked Mule Accounts</label>
+          <div class="value" style="color: #F97316;">${ent.linked_accounts_count} Nodes</div>
+          <div class="sub">Shared Hardware / Phone</div>
+        </div>
+        <div class="entity-tile">
+          <label>Prior Law Enforcement Cases</label>
+          <div class="value" style="color: #EF4444;">${ent.previous_fraud_cases_count} Case Record</div>
+          <div class="sub">FIR 402/2026 Active</div>
+        </div>
+      `;
+
+      // 6. Recommended Actions (Level 6)
+      const actContainer = document.getElementById("actions-container");
+      actContainer.innerHTML = "";
+      data.recommended_actions.forEach(a => {
+        const tile = document.createElement("div");
+        tile.className = "action-tile";
+        tile.onclick = () => handleActionClick(a.action);
+        tile.innerHTML = `
+          <strong>${a.title}</strong>
+          <span>${a.description}</span>
+        `;
+        actContainer.appendChild(tile);
+      });
+
+      // Load visualizers
+      loadNetworkGraph(currentTxnId);
+      loadMoneyFlow(currentTxnId);
+      loadTimeline(currentTxnId);
+    }
+
+    function animateCounter(elem, target) {
+      let current = 0;
+      const step = Math.ceil(target / 25) || 1;
+      const interval = setInterval(() => {
+        current += step;
+        if (current >= target) {
+          current = target;
+          clearInterval(interval);
+        }
+        elem.innerText = current;
+      }, 25);
+    }
+
+    function toggleSignalCard(headerElem) {
+      const body = headerElem.nextElementSibling;
+      body.classList.toggle("open");
+    }
+
+    function switchTransaction(txnId) {
+      currentTxnId = txnId;
+      fetchAssessment(txnId);
+    }
+
+    async function recalculateCurrent() {
+      try {
+        const res = await fetch(`${API_BASE}/api/risk-score/${currentTxnId}/recalculate`, { method: "POST" });
+        const data = await res.json();
+        assessmentData = data.assessment;
+        renderAssessment(data.assessment);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // LIVE TWEAK MUTATION (Judge Sandbox)
+    async function executeTweak(actionOn, actionOff, btnElem) {
+      const isCurrentlyActive = btnElem.classList.contains("active");
+      const targetAction = isCurrentlyActive ? actionOff : actionOn;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/demo/tweak`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: targetAction })
+        });
+        const data = await res.json();
+        btnElem.classList.toggle("active");
+        fetchAssessment(currentTxnId);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function resetDemoState() {
+      try {
+        await fetch(`${API_BASE}/api/demo/reset`, { method: "POST" });
+        document.querySelectorAll(".tweak-btn").forEach(b => b.classList.remove("active"));
+        fetchAssessment(currentTxnId);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Visualizer Tabs
+    function switchTab(tabName, btn) {
+      document.querySelectorAll(".viz-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".viz-view").forEach(v => v.classList.remove("active"));
+
+      document.getElementById(`tab-${tabName}`).classList.add("active");
+      if (btn) btn.classList.add("active");
+      else {
+        const match = Array.from(document.querySelectorAll(".viz-tab")).find(b => b.innerText.toLowerCase().includes(tabName.replace("-", " ")));
+        if (match) match.classList.add("active");
+      }
+    }
+
+    // Interactive Network Graph Renderer
+    async function loadNetworkGraph(txnId) {
+      const box = document.getElementById("graph-container");
+      try {
+        const res = await fetch(`${API_BASE}/api/investigate/network/${txnId}`);
+        const data = await res.json();
+        renderSVGGraph(box, data.nodes, data.edges);
+      } catch (err) {
+        box.innerHTML = `<div style="padding: 20px; color: var(--text-dim);">Graph view unavailable.</div>`;
+      }
+    }
+
+    function renderSVGGraph(container, nodes, edges) {
+      const width = container.clientWidth || 700;
+      const height = 380;
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      // Position center node (DEV-204)
+      const centerNode = nodes.find(n => n.type === "device") || nodes[0];
+      const otherNodes = nodes.filter(n => n.id !== centerNode?.id);
+
+      const positions = {};
+      if (centerNode) {
+        positions[centerNode.id] = { x: centerX, y: centerY };
+      }
+
+      const radius = Math.min(width, height) * 0.38;
+      otherNodes.forEach((node, i) => {
+        const angle = (i / otherNodes.length) * 2 * Math.PI;
+        positions[node.id] = {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle)
+        };
+      });
+
+      let svgHtml = `<svg width="${width}" height="${height}" style="cursor: grab;">
+        <defs>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="glow"/>
+            <feComposite in="SourceGraphic" in2="glow" operator="over"/>
+          </filter>
+        </defs>`;
+
+      // Render Edges
+      edges.forEach(e => {
+        const p1 = positions[e.source];
+        const p2 = positions[e.target];
+        if (p1 && p2) {
+          svgHtml += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${e.color || '#475569'}" stroke-width="1.8" stroke-dasharray="${e.label === 'POLICE_RECORD' ? '4,4' : 'none'}" opacity="0.6"/>`;
+        }
+      });
+
+      // Render Nodes
+      nodes.forEach(n => {
+        const pos = positions[n.id] || { x: centerX, y: centerY };
+        let fillColor = "#3B82F6";
+        let r = 24;
+        if (n.type === "device") { fillColor = "#F97316"; r = 28; }
+        else if (n.type === "fraud_case") { fillColor = "#DC2626"; r = 26; }
+        else if (n.type === "transaction") { fillColor = "#EF4444"; r = 26; }
+        else if (n.type === "account") { fillColor = "#1E3A8A"; r = 22; }
+
+        svgHtml += `
+          <g id="node-${n.id.replace(/[^a-zA-Z0-9]/g, '_')}" style="cursor: pointer;" onclick="showNodeDetails('${n.id}', '${n.label.replace('\n', ' ')}', '${n.details || ''}')">
+            <circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5" filter="url(#glow)"/>
+            <text x="${pos.x}" y="${pos.y + 4}" font-size="9" font-weight="700" fill="#FFFFFF" text-anchor="middle" font-family="monospace">
+              ${n.id.substring(0, 7)}
+            </text>
+            <text x="${pos.x}" y="${pos.y + r + 13}" font-size="10" fill="#94A3B8" text-anchor="middle">
+              ${n.label.split('\n')[0]}
+            </text>
+          </g>
+        `;
+      });
+
+      svgHtml += `</svg>`;
+      container.innerHTML = svgHtml;
+    }
+
+    function showNodeDetails(id, label, details) {
+      alert(`[Entity Inspector]\nID: ${id}\nName: ${label}\nDetails: ${details}`);
+    }
+
+    function highlightNode(id) {
+      if (!id) return;
+      const cleanId = id.replace(/[^a-zA-Z0-9]/g, '_');
+      const elem = document.getElementById(`node-${cleanId}`);
+      if (elem) {
+        elem.querySelector("circle").setAttribute("stroke", "#38BDF8");
+        elem.querySelector("circle").setAttribute("stroke-width", "4");
+      }
+    }
+
+    // Money Flow
+    async function loadMoneyFlow(txnId) {
+      const container = document.getElementById("money-flow-container");
+      try {
+        const res = await fetch(`${API_BASE}/api/investigate/money-flow/${txnId}`);
+        const data = await res.json();
+        container.innerHTML = "";
+        data.flow_path.forEach(hop => {
+          const row = document.createElement("div");
+          row.className = "flow-hop";
+          row.innerHTML = `
+            <div class="flow-entity">${hop.from_entity}</div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-entity">${hop.to_entity}</div>
+            <div style="text-align: right;">
+              <div class="flow-amount">₹${hop.amount.toLocaleString()}</div>
+              <span class="flow-badge">${hop.edge_type}</span>
+            </div>
+          `;
+          container.appendChild(row);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Timeline
+    async function loadTimeline(txnId) {
+      const container = document.getElementById("timeline-container");
+      try {
+        const res = await fetch(`${API_BASE}/api/risk-score/${txnId}/timeline`);
+        const data = await res.json();
+        container.innerHTML = "";
+        data.events.forEach(ev => {
+          const node = document.createElement("div");
+          node.className = "timeline-node";
+          const dotClass = ev.severity.toLowerCase();
+          node.innerHTML = `
+            <div class="timeline-dot ${dotClass}"></div>
+            <div class="timeline-time">${ev.timestamp.split(" ")[1]}</div>
+            <div class="timeline-title">${ev.title}</div>
+            <div class="timeline-desc">${ev.description}</div>
+          `;
+          container.appendChild(node);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Actions
+    function handleActionClick(action) {
+      if (action === "open_network") switchTab("network");
+      else if (action === "open_money_flow") switchTab("money-flow");
+      else if (action === "open_cases" || action === "export_dossier") openEvidencePack();
+      else if (action === "filter_txns") switchTab("timeline");
+      else alert(`Investigator action '${action}' registered and logged to audit trail.`);
+    }
+
+    // Evidence Pack Modal
+    async function openEvidencePack() {
+      const modal = document.getElementById("evidence-modal");
+      const content = document.getElementById("dossier-content");
+      content.innerHTML = `<div style="padding: 20px; color: var(--text-dim);">Generating sealed cryptographic dossier...</div>`;
+      modal.classList.add("open");
+
+      try {
+        const res = await fetch(`${API_BASE}/api/investigate/evidence-pack/${currentTxnId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ badge_number: "INSP-MUMBAI-771" })
+        });
+        const dossier = await res.json();
+
+        const signalsList = dossier.evidence_signals.map(s => `
+          <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 6px; margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-weight: 700; color: #FFFFFF; font-size: 0.85rem;">
+              <span>${s.signal}</span>
+              <span style="color: #EF4444;">${s.contribution}</span>
+            </div>
+            <p style="font-size: 0.8rem; color: #94A3B8; margin: 4px 0;">${s.finding}</p>
+            <div style="font-size: 0.75rem; color: #38BDF8; font-family: monospace;">Observed: ${s.observed} | Threshold: ${s.threshold}</div>
+          </div>
+        `).join("");
+
+        content.innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; font-size: 0.82rem;">
+            <div>
+              <p><strong>Dossier ID:</strong> ${dossier.dossier_id}</p>
+              <p><strong>Generated At:</strong> ${dossier.generated_at}</p>
+              <p><strong>Investigating Officer:</strong> ${dossier.investigator.name} (${dossier.investigator.badge})</p>
+            </div>
+            <div>
+              <p><strong>Target Transaction:</strong> ${dossier.transaction.transaction_id} (${dossier.transaction.amount})</p>
+              <p><strong>Converging Risk Score:</strong> <strong style="color: #EF4444;">${dossier.risk_evaluation.converging_score} (${dossier.risk_evaluation.severity})</strong></p>
+              <p><strong>Assessment Confidence:</strong> ${dossier.risk_evaluation.confidence}</p>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <h4 style="font-size: 0.88rem; color: #FFFFFF; margin-bottom: 8px;">EXECUTIVE SUMMARY OF FINDINGS:</h4>
+            <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; font-size: 0.82rem; color: #E2E8F0; line-height: 1.5;">
+              ${dossier.executive_summary}
+            </div>
+          </div>
+
+          <div>
+            <h4 style="font-size: 0.88rem; color: #FFFFFF; margin-bottom: 8px;">OBSERVABLE FRAUD SIGNALS & EVIDENCE:</h4>
+            ${signalsList}
+          </div>
+
+          <div class="dossier-hash">
+            <strong>FIPS 180-4 SHA-256 EVIDENCE CHECKSUM:</strong><br>
+            ${dossier.cryptographic_verification.evidence_hash}
+          </div>
+        `;
+      } catch (err) {
+        content.innerHTML = `<div style="color: #EF4444;">Error generating dossier: ${err.message}</div>`;
+      }
+    }
+
+    function closeEvidencePack() {
+      document.getElementById("evidence-modal").classList.remove("open");
+    }
+
+    // Initialize
+    window.addEventListener("DOMContentLoaded", () => {
+      fetchAssessment(currentTxnId);
+    });
+  </script>
+</body>
+</html>

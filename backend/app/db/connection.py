@@ -138,6 +138,56 @@ def init_db(db_path: Optional[str] = None):
         severity TEXT NOT NULL,
         FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id)
     );
+
+    CREATE TABLE IF NOT EXISTS investigation_sessions (
+        investigation_id TEXT PRIMARY KEY,
+        root_id TEXT NOT NULL,
+        root_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT DEFAULT 'OPEN'
+    );
+
+    CREATE TABLE IF NOT EXISTS investigation_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        investigation_id TEXT NOT NULL,
+        note_text TEXT NOT NULL,
+        author TEXT DEFAULT 'Lead Investigator',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (investigation_id) REFERENCES investigation_sessions(investigation_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS investigation_findings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        investigation_id TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        is_important INTEGER DEFAULT 1,
+        reason TEXT,
+        added_at TEXT NOT NULL,
+        FOREIGN KEY (investigation_id) REFERENCES investigation_sessions(investigation_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS investigation_evidence (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        investigation_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        details TEXT NOT NULL,
+        source TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (investigation_id) REFERENCES investigation_sessions(investigation_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS investigation_audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        investigation_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        entity_id TEXT,
+        details TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (investigation_id) REFERENCES investigation_sessions(investigation_id)
+    );
     """)
 
     conn.commit()

@@ -35,6 +35,7 @@ def seed_database(db_path: Optional[str] = None):
         ("DEV-045", "fp_device_r_mehta_55", "Windows 11 / Chrome 128", "152.58.18.204", 0, "2026-05-12 08:30:00", "2026-09-09 16:15:00"),
         ("DEV-078", "fp_syndicate_laptop_77", "Ubuntu 24.04 / Firefox", "103.190.11.5", 0, "2026-07-20 11:00:00", "2026-09-09 17:50:00"),
         ("DEV-VIC-01", "fp_victim_device_22", "iOS 17.5 / iPhone 14", "122.161.45.10", 0, "2024-01-01 09:00:00", "2026-09-09 18:40:00"),
+        ("DEV-10021", "fp_clean_phone_10021", "iOS 17.5 / iPhone 13", "49.36.110.12", 0, "2026-03-10 10:00:00", "2026-09-09 11:30:00"),
     ]
     cursor.executemany("INSERT INTO devices VALUES (?, ?, ?, ?, ?, ?, ?)", devices)
 
@@ -50,6 +51,7 @@ def seed_database(db_path: Optional[str] = None):
         ("+91-98333-65432", "Jio Mumbai", 0),
         ("+91-98777-11223", "Vi Gujarat", 0),
         ("+91-99200-11223", "Airtel Mumbai", 0),
+        ("+91-98201-00021", "Jio Mumbai", 0),
     ]
     cursor.executemany("INSERT INTO phones VALUES (?, ?, ?)", phones)
 
@@ -63,6 +65,7 @@ def seed_database(db_path: Optional[str] = None):
         ("rohan.m@icici", "rohan.m", "ICICI Bank", 0),
         ("sameer.k@ybl", "sameer.k", "Yes Bank", 0),
         ("vandana@okaxis", "vandana", "Axis Bank", 0),
+        ("ramesh.v@okhdfcbank", "ramesh.v", "HDFC Bank", 0),
     ]
     cursor.executemany("INSERT INTO upis VALUES (?, ?, ?, ?)", upis)
 
@@ -72,6 +75,7 @@ def seed_database(db_path: Optional[str] = None):
         ("BEN-012", "Tata Power Mumbai Utility", "00241040001889", "SBIN0000300", 0),
         ("BEN-045", "Chroma Electronics Andheri", "50100288194411", "HDFC0000060", 0),
         ("BEN-078", "FastCash P2P Settlement Hub", "11048899220011", "UTIB0000122", 0),
+        ("BEN-LOCAL-09", "Local Grocery Store Dadar", "990011223344", "HDFC0000128", 0),
     ]
     cursor.executemany("INSERT INTO beneficiaries VALUES (?, ?, ?, ?, ?)", beneficiaries)
 
@@ -91,6 +95,7 @@ def seed_database(db_path: Optional[str] = None):
         ("ACC-078", "Sameer Khan (High Velocity)", "HIGH", 0, "+91-98777-11223", "sameer.k@ybl", "DEV-078", "JRSK0789B", "2026-04-05 13:25:00"),
         ("ACC-099", "ATM Cash Transfer (Unregistered)", "LOW", 0, None, None, None, None, "2026-09-01 00:00:00"),
         ("ACC-VIC-901", "Vandana Iyer (Victim Account)", "LOW", 0, "+91-99200-11223", "vandana@okaxis", "DEV-VIC-01", "KPAI9012W", "2024-01-01 09:00:00"),
+        ("ACC-10021", "Ramesh Verma (Retail User)", "LOW", 0, "+91-98201-00021", "ramesh.v@okhdfcbank", "DEV-10021", "ABCDE1234F", "2025-06-01 10:00:00"),
     ]
     cursor.executemany("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", accounts)
 
@@ -200,6 +205,9 @@ def seed_database(db_path: Optional[str] = None):
 
         # Benchmark MISSING-DATA transaction (no device telemetry)
         ("TXN-MISSING-004", "ACC-099", None, None, None, "BEN-012", 5000.0, "INR", "2026-09-09 12:00:00", "COMPLETED", "IMPS", None, None),
+
+        # Benchmark EMPTY / CLEAN transaction (Section 36: No Significant Suspicious Connections Found)
+        ("TXN-10021", "ACC-10021", "DEV-10021", "+91-98201-00021", "ramesh.v@okhdfcbank", "BEN-LOCAL-09", 2400.0, "INR", "2026-09-09 11:30:00", "COMPLETED", "UPI", 19.0178, 72.8478),
     ]
     cursor.executemany("INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", key_transactions)
 

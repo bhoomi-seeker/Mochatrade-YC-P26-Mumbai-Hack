@@ -48,7 +48,8 @@ class FraudNexusRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/")
-        parts = path.split("/")[1:]  # e.g. ['api', 'risk-score', 'TXN-48291']
+        parts = path.split("/")[1:]  # e.g. ['api', 'investigation', 'transaction', 'TXN-48291']
+        qs = urllib.parse.parse_qs(parsed.query)
 
         if len(parts) >= 2 and parts[0] == "api":
             # API Routing
@@ -76,15 +77,76 @@ class FraudNexusRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json(status, data)
                     return
 
-            if parts[1] == "investigate" and len(parts) >= 4:
-                sub = parts[2]
-                txn_id = parts[3]
-                if sub == "network":
-                    status, data = handler.handle_get_network_graph(txn_id)
+            # Investigation Endpoints
+            if parts[1] in ("investigation", "investigate"):
+                # /api/investigate/network/:txn_id (Legacy)
+                if len(parts) >= 4 and parts[2] == "network":
+                    status, data = handler.handle_get_network_graph(parts[3])
                     self.send_json(status, data)
                     return
-                elif sub == "money-flow":
-                    status, data = handler.handle_get_money_flow(txn_id)
+                elif len(parts) >= 4 and parts[2] == "money-flow":
+                    status, data = handler.handle_get_money_flow(parts[3])
+                    self.send_json(status, data)
+                    return
+
+                # /api/investigation/transaction/:transactionId?depth=3
+                if len(parts) >= 4 and parts[2] == "transaction":
+                    depth = int(qs.get("depth", [3])[0])
+                    status, data = handler.handle_get_investigation_by_transaction(parts[3], depth=depth)
+                    self.send_json(status, data)
+                    return
+
+                # /api/investigation/entity/:entityType/:entityId
+                # /api/investigation/entity/:entityType/:entityId/connections
+                if len(parts) >= 5 and parts[2] == "entity":
+                    if len(parts) >= 6 and parts[5] == "connections":
+                        status, data = handler.handle_get_entity_connections(parts[3], parts[4])
+                        self.send_json(status, data)
+                        return
+                    else:
+                        depth = int(qs.get("depth", [3])[0])
+                        status, data = handler.handle_get_investigation_by_entity(parts[3], parts[4], depth=depth)
+                        self.send_json(status, data)
+                        return
+
+                # /api/investigation/path?source=...&target=...
+                if len(parts) >= 3 and parts[2] == "path":
+                    src = qs.get("source", [""])[0]
+                    tgt = qs.get("target", [""])[0]
+                    status, data = handler.handle_get_shortest_path(src, tgt)
+                    self.send_json(status, data)
+                    return
+
+                # /api/investigation/timeline/:id or /api/investigation/:id/timeline
+                if len(parts) >= 4 and parts[2] == "timeline":
+                    status, data = handler.handle_get_investigation_timeline(parts[3])
+                    self.send_json(status, data)
+                    return
+                elif len(parts) >= 4 and parts[3] == "timeline":
+                    status, data = handler.handle_get_investigation_timeline(parts[2])
+                    self.send_json(status, data)
+                    return
+
+                # /api/investigation/account/:id/history
+                if len(parts) >= 5 and parts[2] == "account" and parts[4] == "history":
+                    status, data = handler.handle_get_account_history(parts[3])
+                    self.send_json(status, data)
+                    return
+
+                # /api/investigation/search?q=...
+                if len(parts) >= 3 and parts[2] == "search":
+                    q = qs.get("q", [""])[0]
+                    status, data = handler.handle_search_entities(q)
+                    self.send_json(status, data)
+                    return
+
+                # /api/investigation/session/:id or /api/investigation/:id/session
+                if len(parts) >= 4 and parts[2] == "session":
+                    status, data = handler.handle_get_investigation_session(parts[3])
+                    self.send_json(status, data)
+                    return
+                elif len(parts) >= 4 and parts[3] == "session":
+                    status, data = handler.handle_get_investigation_session(parts[2])
                     self.send_json(status, data)
                     return
 
@@ -99,7 +161,6 @@ class FraudNexusRequestHandler(http.server.SimpleHTTPRequestHandler):
         if static_file.exists() and static_file.is_file():
             self.serve_file(static_file)
         else:
-            # Fallback to index.html for Single Page App
             fallback = FRONTEND_DIR / "index.html"
             if fallback.exists():
                 self.serve_file(fallback)
@@ -135,12 +196,47 @@ class FraudNexusRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json(status, data)
                     return
 
-            if parts[1] == "investigate" and len(parts) >= 4:
-                if parts[2] == "evidence-pack":
+            if parts[1] in ("investigation", "investigate"):
+                if len(parts) >= 4 and parts[2] == "evidence-pack":
                     txn_id = parts[3]
                     status, data = handler.handle_generate_evidence_pack(txn_id, body)
                     self.send_json(status, data)
                     return
+
+                # POST /api/investigation (create session)
+                if len(parts) == 2:
+                    status, data = handler.handle_create_investigation_session(body)
+                    self.send_json(status, data)
+                    return
+
+                # POST /api/investigation/:id/note
+                # POST /api/investigation/:id/evidence
+                # POST /api/investigation/:id/important
+                # POST /api/investigation/:id/create-case
+                if len(parts) >= 4:
+                    inv_id = parts[2]
+                    sub = parts[3]
+                    if sub == "note":
+                        status, data = handler.handle_add_investigation_note(inv_id, body)
+                        self.send_json(status, data)
+                        return
+                    elif sub == "evidence":
+                        status, data = handler.handle_add_investigation_evidence(inv_id, body)
+                        self.send_json(status, data)
+                        return
+                    elif sub == "important":
+                        status, data = handler.handle_add_investigation_finding(inv_id, body)
+                        self.send_json(status, data)
+                        return
+                    elif sub == "create-case":
+                        status, data = handler.handle_create_case_from_investigation(inv_id, body)
+                        self.send_json(status, data)
+                        return
+                    elif sub == "connections":
+                        entity_type = body.get("entity_type", "ACCOUNT")
+                        status, data = handler.handle_get_entity_connections(entity_type, inv_id, body)
+                        self.send_json(status, data)
+                        return
 
             self.send_json(404, {"error": "POST_ENDPOINT_NOT_FOUND", "path": path})
             return
@@ -176,10 +272,10 @@ def run_server(port: int = PORT):
     server_address = ("", port)
     httpd = http.server.ThreadingHTTPServer(server_address, FraudNexusRequestHandler)
     print(f"\n=======================================================")
-    print(f"  FRAUDNEXUS EXPLAINABLE FRAUD RISK INTELLIGENCE ENGINE")
+    print(f"  FRAUDNEXUS INVESTIGATION & TRACE FRAUD ENGINE")
     print(f"  Server listening on http://localhost:{port}")
     print(f"  REST API Base: http://localhost:{port}/api")
-    print(f"  Primary Demo Case: http://localhost:{port}/api/risk-score/TXN-48291")
+    print(f"  Primary Investigation: http://localhost:{port}/api/investigation/transaction/TXN-48291")
     print(f"=======================================================\n")
     try:
         httpd.serve_forever()

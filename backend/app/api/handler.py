@@ -8,13 +8,15 @@ import json
 import sqlite3
 import hashlib
 from datetime import datetime
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional, List
 from ..db.connection import get_connection
 from ..db.seed_data import seed_database
 from ..scoring.engine import RiskScoringService
+from ..investigation.engine import InvestigationService
 from ..config import DEFAULT_CONFIG
 
 service = RiskScoringService(DEFAULT_CONFIG)
+investigation_service = InvestigationService()
 
 def handle_get_risk_score(txn_id: str) -> Tuple[int, Dict[str, Any]]:
     conn = get_connection()
@@ -49,7 +51,6 @@ def handle_get_entities(txn_id: str) -> Tuple[int, Dict[str, Any]]:
         assessment = service.assess_transaction(txn_id, conn, persist=False)
         cursor = conn.cursor()
 
-        # Detailed entity cards
         account_id = assessment.related_entities["account"]
         device_id = assessment.related_entities["device"]
         upi_id = assessment.related_entities["upi"]
@@ -130,86 +131,19 @@ def handle_what_if(txn_id: str, body: Dict[str, Any]) -> Tuple[int, Dict[str, An
         conn.close()
 
 def handle_get_network_graph(txn_id: str) -> Tuple[int, Dict[str, Any]]:
+    """Legacy network endpoint - forwards to rich investigation graph."""
     conn = get_connection()
     try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM transactions WHERE transaction_id = ?", (txn_id,))
-        txn = cursor.fetchone()
-        if not txn:
-            return 404, {"error": "TRANSACTION_NOT_FOUND"}
-
-        account_id = txn["account_id"]
-        device_id = txn["device_id"]
-        upi_id = txn["upi_id"]
-
-        nodes = []
-        edges = []
-
-        # Target Transaction Node
-        nodes.append({
-            "id": txn_id, "label": f"{txn_id}\nRs. {txn['amount']:,.0f}",
-            "type": "transaction", "severity": "CRITICAL",
-            "details": f"Target Transaction ({txn['timestamp']})"
-        })
-
-        # Originating Account Node
-        nodes.append({
-            "id": account_id, "label": f"{account_id}\nVikram Sethi",
-            "type": "account", "severity": "CRITICAL",
-            "details": "Primary Subject Account (Mule Hub)"
-        })
-        edges.append({"source": account_id, "target": txn_id, "label": "INITIATED", "color": "#ef4444"})
-
-        # Device Node & Connected Accounts
-        if device_id:
-            nodes.append({
-                "id": device_id, "label": f"{device_id}\nShared Hardware",
-                "type": "device", "severity": "CRITICAL",
-                "details": "Fingerprint: fp_mumbai_mule_8a7c2b (Android 14)"
-            })
-            edges.append({"source": device_id, "target": account_id, "label": "BOUND_TO", "color": "#f97316"})
-
-            # Connected mule accounts
-            cursor.execute("SELECT account_id, holder_name, risk_tier FROM accounts WHERE device_id = ?", (device_id,))
-            mule_accs = cursor.fetchall()
-            for m in mule_accs:
-                m_id = m["account_id"]
-                if m_id != account_id:
-                    nodes.append({
-                        "id": m_id, "label": f"{m_id}\n{m['holder_name'].split('(')[0]}",
-                        "type": "account", "severity": m["risk_tier"],
-                        "details": f"Linked Mule Account ({m['holder_name']})"
-                    })
-                    edges.append({"source": device_id, "target": m_id, "label": "SHARED_HARDWARE", "color": "#f97316"})
-
-        # UPI Destination Node
-        if upi_id:
-            nodes.append({
-                "id": upi_id, "label": f"{upi_id}\nLaundering Funnel",
-                "type": "upi", "severity": "HIGH",
-                "details": "Virtual Payment Address (ICICI Bank)"
-            })
-            edges.append({"source": txn_id, "target": upi_id, "label": "PAYMENT_TO", "color": "#ef4444"})
-
-        # Fraud Case Node
-        cursor.execute("SELECT case_id, title FROM fraud_cases WHERE case_id = 'CASE-2026-018'")
-        case_row = cursor.fetchone()
-        if case_row:
-            nodes.append({
-                "id": case_row["case_id"], "label": f"{case_row['case_id']}\nFIR 402/2026",
-                "type": "fraud_case", "severity": "CRITICAL",
-                "details": case_row["title"]
-            })
-            edges.append({"source": case_row["case_id"], "target": account_id, "label": "POLICE_RECORD", "color": "#dc2626"})
-            if device_id:
-                edges.append({"source": case_row["case_id"], "target": device_id, "label": "SEIZED_HARDWARE", "color": "#dc2626"})
-
+        graph = investigation_service.discover_network("TRANSACTION", txn_id, max_depth=3, conn=conn)
         return 200, {
             "transaction_id": txn_id,
-            "center_node": device_id or account_id,
-            "nodes": nodes,
-            "edges": edges
+            "center_node": graph.root["id"],
+            "nodes": [n.to_dict() for n in graph.nodes],
+            "edges": [e.to_dict() for e in graph.edges],
+            "summary": graph.risk_summary
         }
+    except ValueError as e:
+        return 404, {"error": "TRANSACTION_NOT_FOUND", "message": str(e)}
     finally:
         conn.close()
 
@@ -219,8 +153,6 @@ def handle_get_money_flow(txn_id: str) -> Tuple[int, Dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM money_flow_edges WHERE case_id = 'CASE-2026-018' ORDER BY hop_order ASC, timestamp ASC")
         rows = [dict(r) for r in cursor.fetchall()]
-        
-        total_volume = sum(r["amount"] for r in rows)
         hops_count = len(rows)
 
         return 200, {
@@ -234,20 +166,246 @@ def handle_get_money_flow(txn_id: str) -> Tuple[int, Dict[str, Any]]:
     finally:
         conn.close()
 
+# ========================================================
+# INVESTIGATION ENGINE ENDPOINTS (Phase 7 / Section 29)
+# ========================================================
+
+def handle_get_investigation_by_transaction(txn_id: str, depth: int = 3) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        graph = investigation_service.discover_network("TRANSACTION", txn_id, max_depth=depth, conn=conn)
+        # Ensure session exists and log audit
+        session = investigation_service.get_or_create_session(txn_id, "TRANSACTION", conn)
+        investigation_service.log_audit(session["investigation_id"], "ENTITY_VIEWED", txn_id, f"Viewed transaction {txn_id} at depth {depth}", conn)
+        res = graph.to_dict()
+        res["session"] = session
+        return 200, res
+    except ValueError as e:
+        return 404, {"error": "TRANSACTION_NOT_FOUND", "message": str(e)}
+    except Exception as e:
+        return 500, {"error": "INVESTIGATION_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_get_investigation_by_entity(entity_type: str, entity_id: str, depth: int = 3) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        graph = investigation_service.discover_network(entity_type, entity_id, max_depth=depth, conn=conn)
+        session = investigation_service.get_or_create_session(entity_id, entity_type.upper(), conn)
+        investigation_service.log_audit(session["investigation_id"], "ENTITY_VIEWED", entity_id, f"Investigated {entity_type} {entity_id} at depth {depth}", conn)
+        res = graph.to_dict()
+        res["session"] = session
+        return 200, res
+    except ValueError as e:
+        return 404, {"error": "ENTITY_NOT_FOUND", "message": str(e)}
+    except Exception as e:
+        return 500, {"error": "INVESTIGATION_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_get_entity_connections(entity_type: str, entity_id: str, body: Optional[Dict[str, Any]] = None) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        existing_ids = (body or {}).get("existing_ids", [])
+        expansion = investigation_service.expand_entity_connections(entity_type, entity_id, existing_ids, conn=conn)
+        inv_id = (body or {}).get("investigation_id", f"INV-2026-{abs(hash(entity_id)) % 900 + 100:03d}")
+        investigation_service.log_audit(inv_id, "NODE_EXPANDED", entity_id, f"Expanded {expansion['new_nodes_count']} connections for {entity_type} {entity_id}", conn)
+        return 200, expansion
+    except Exception as e:
+        return 500, {"error": "EXPANSION_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_get_shortest_path(source_id: str, target_id: str) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        path = investigation_service.find_shortest_suspicious_path(source_id, target_id, conn=conn)
+        if not path:
+            return 404, {"error": "PATH_NOT_FOUND", "message": f"No path found connecting {source_id} and {target_id}."}
+        inv_id = f"INV-2026-{abs(hash(source_id)) % 900 + 100:03d}"
+        investigation_service.log_audit(inv_id, "PATH_TRACED", f"{source_id}->{target_id}", f"Traced path across {path['hop_count']} hops: {path['description']}", conn)
+        return 200, path
+    except Exception as e:
+        return 500, {"error": "PATH_FINDING_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_get_investigation_timeline(target_id: str) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        events = investigation_service.get_investigation_timeline(target_id, conn=conn)
+        return 200, {
+            "target_id": target_id,
+            "total_events": len(events),
+            "events": events
+        }
+    except Exception as e:
+        return 500, {"error": "TIMELINE_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_get_account_history(account_id: str) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        history = investigation_service.get_account_transaction_history(account_id, limit=25, conn=conn)
+        return 200, {
+            "account_id": account_id,
+            "total_transactions": len(history),
+            "transactions": history
+        }
+    except Exception as e:
+        return 500, {"error": "HISTORY_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_search_entities(query: str) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        results = investigation_service.search_entities(query, limit=15, conn=conn)
+        return 200, {"query": query, "results": results}
+    except Exception as e:
+        return 500, {"error": "SEARCH_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_create_investigation_session(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    root_id = body.get("root_id")
+    root_type = body.get("root_type", "TRANSACTION")
+    if not root_id:
+        return 400, {"error": "MISSING_ROOT_ID", "message": "Field 'root_id' is required."}
+
+    conn = get_connection()
+    try:
+        session = investigation_service.get_or_create_session(root_id, root_type, conn=conn)
+        return 200, session
+    except Exception as e:
+        return 500, {"error": "SESSION_CREATE_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_get_investigation_session(session_id: str) -> Tuple[int, Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        details = investigation_service.get_session_details(session_id, conn=conn)
+        if not details:
+            return 404, {"error": "SESSION_NOT_FOUND", "message": f"Session {session_id} not found."}
+        return 200, details
+    except Exception as e:
+        return 500, {"error": "SESSION_FETCH_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_add_investigation_note(session_id: str, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    note_text = body.get("note_text") or body.get("note")
+    author = body.get("author", "Lead Investigator")
+    if not note_text:
+        return 400, {"error": "MISSING_NOTE_TEXT", "message": "Field 'note_text' is required."}
+
+    conn = get_connection()
+    try:
+        res = investigation_service.add_note(session_id, note_text, author, conn=conn)
+        return 200, res
+    except Exception as e:
+        return 500, {"error": "NOTE_ADD_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_add_investigation_finding(session_id: str, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    item_type = body.get("item_type", "ENTITY")
+    item_id = body.get("item_id")
+    label = body.get("label", item_id or "Important Node")
+    reason = body.get("reason", "Marked as critical by investigator")
+    if not item_id:
+        return 400, {"error": "MISSING_ITEM_ID"}
+
+    conn = get_connection()
+    try:
+        res = investigation_service.add_finding(session_id, item_type, item_id, label, reason, conn=conn)
+        return 200, res
+    except Exception as e:
+        return 500, {"error": "FINDING_ADD_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_add_investigation_evidence(session_id: str, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    title = body.get("title", "Telemetry Evidence")
+    details = body.get("details", "")
+    source = body.get("source", "Graph Discovery Engine")
+    conn = get_connection()
+    try:
+        res = investigation_service.add_evidence(session_id, title, details, source, conn=conn)
+        return 200, res
+    except Exception as e:
+        return 500, {"error": "EVIDENCE_ADD_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+def handle_create_case_from_investigation(session_id: str, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    """Creates a new official case from investigation session data."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        details = investigation_service.get_session_details(session_id, conn=conn)
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        case_id = f"CASE-2026-{abs(hash(session_id)) % 900 + 100:03d}"
+        title = body.get("title") or f"Operation Trident — Escalated Case from {session_id}"
+        description = body.get("description") or f"Formal case escalated from investigation session {session_id}. Multiple linked entities identified in organized fraud ring."
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO fraud_cases (case_id, title, status, description, created_at)
+            VALUES (?, ?, 'ACTIVE', ?, ?)
+        """, (case_id, title, description, now))
+
+        # Link findings
+        for f in details.get("findings", []):
+            cursor.execute("""
+                INSERT INTO case_entity_links (case_id, entity_type, entity_id, reason)
+                VALUES (?, ?, ?, ?)
+            """, (case_id, f["item_type"].lower(), f["item_id"], f.get("reason", "Discovered during investigation")))
+
+        investigation_service.log_audit(session_id, "CASE_CREATED", case_id, f"Escalated formal case {case_id}: {title}", conn)
+        conn.commit()
+
+        return 200, {
+            "case_id": case_id,
+            "title": title,
+            "status": "ACTIVE",
+            "linked_findings_count": len(details.get("findings", [])),
+            "created_at": now
+        }
+    except Exception as e:
+        return 500, {"error": "CASE_CREATE_ERROR", "message": str(e)}
+    finally:
+        conn.close()
+
+# ========================================================
+# ENHANCED EVIDENCE PACK DOSSIER (Section 26, 48)
+# ========================================================
+
 def handle_generate_evidence_pack(txn_id: str, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     conn = get_connection()
     try:
         assessment = service.assess_transaction(txn_id, conn, persist=True)
         investigator_name = body.get("investigator_name", "Lead Inspector - Mumbai Cyber Cell")
         badge_number = body.get("badge_number", "MC-CYBER-884")
+        investigation_id = body.get("investigation_id") or f"INV-2026-{abs(hash(txn_id)) % 900 + 100:03d}"
 
-        # Compile cryptographic evidence dossier
+        # Fetch investigation details
+        sess_details = investigation_service.get_session_details(investigation_id, conn=conn)
+        graph = investigation_service.discover_network("TRANSACTION", txn_id, max_depth=3, conn=conn)
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
-        canonical_content = f"{assessment.assessment_id}:{txn_id}:{assessment.score}:{timestamp}:{badge_number}"
+        canonical_content = f"{assessment.assessment_id}:{txn_id}:{assessment.score}:{timestamp}:{badge_number}:{investigation_id}"
         evidence_sha256 = hashlib.sha256(canonical_content.encode("utf-8")).hexdigest()
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT amount, currency, channel FROM transactions WHERE transaction_id = ?", (txn_id,))
+        t_row = cursor.fetchone()
+        txn_amt_str = f"Rs. {t_row['amount']:,.2f}" if t_row else "Rs. 48,500.00"
 
         dossier = {
             "dossier_id": f"DOSSIER-{assessment.assessment_id}",
+            "investigation_id": investigation_id,
             "generated_at": timestamp,
             "investigator": {
                 "name": investigator_name,
@@ -256,12 +414,12 @@ def handle_generate_evidence_pack(txn_id: str, body: Dict[str, Any]) -> Tuple[in
             },
             "transaction": {
                 "transaction_id": txn_id,
-                "amount": "Rs. 48,500.00",
+                "amount": txn_amt_str,
                 "currency": "INR",
                 "channel": "UPI / Instant Real-Time Rail",
-                "primary_subject": "Vikram Sethi (ACC-104)",
-                "hardware_id": "DEV-204",
-                "destination_upi": "merchant-x@upi"
+                "primary_subject": f"{assessment.related_entities.get('holder_name', 'Subject')} ({assessment.related_entities.get('account')})",
+                "hardware_id": assessment.related_entities.get("device", "UNREGISTERED"),
+                "destination_upi": assessment.related_entities.get("upi", "DIRECT")
             },
             "risk_evaluation": {
                 "converging_score": f"{assessment.score} / 100",
@@ -270,6 +428,18 @@ def handle_generate_evidence_pack(txn_id: str, body: Dict[str, Any]) -> Tuple[in
                 "engine_version": assessment.engine_version,
                 "configuration_profile": assessment.config_profile
             },
+            "investigation_findings": {
+                "total_entities_discovered": len(graph.nodes),
+                "total_relationships_verified": len(graph.edges),
+                "suspicious_connections_count": graph.risk_summary.get("suspicious_connections_count", 0),
+                "previous_fraud_links_count": graph.risk_summary.get("previous_fraud_links_count", 0),
+                "headline": graph.risk_summary.get("headline", ""),
+                "summary": graph.risk_summary.get("narrative", "")
+            },
+            "suspicious_paths": [p.to_dict() for p in graph.paths],
+            "investigator_notes": [n["note_text"] for n in sess_details.get("notes", [])],
+            "marked_findings": [f["label"] for f in sess_details.get("findings", [])],
+            "collected_evidence": sess_details.get("evidence", []),
             "evidence_signals": [
                 {
                     "signal": s.name,
@@ -313,6 +483,14 @@ def handle_get_demo_cases() -> Tuple[int, Dict[str, Any]]:
             "highlight": "Single registered device, normal velocity, zero prior fraud"
         },
         {
+            "id": "TXN-10021",
+            "name": "Clean Normal Retail (Empty Network)",
+            "tier": "LOW",
+            "amount": "Rs. 2,400",
+            "expected_score": 0,
+            "highlight": "Demonstrates 'No Significant Suspicious Connections Found' benchmark"
+        },
+        {
             "id": "TXN-MED-002",
             "name": "E-Commerce Velocity Anomaly",
             "tier": "MEDIUM",
@@ -340,16 +518,12 @@ def handle_get_demo_cases() -> Tuple[int, Dict[str, Any]]:
     return 200, {"cases": cases}
 
 def handle_demo_tweak(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
-    """
-    Directly mutates the SQLite database live to prove real dynamic calculation to judges.
-    """
     action = body.get("action")
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
         if action == "unlink_device":
-            # Change device for 4 accounts to DEV-012 so DEV-204 only has 2 accounts (below threshold 3)
             cursor.execute("UPDATE accounts SET device_id = 'DEV-012' WHERE account_id IN ('ACC-145', 'ACC-167', 'ACC-189', 'ACC-203')")
             cursor.execute("UPDATE transactions SET device_id = 'DEV-012' WHERE account_id IN ('ACC-145', 'ACC-167', 'ACC-189', 'ACC-203')")
             conn.commit()
@@ -416,7 +590,6 @@ def handle_demo_tweak(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             }
 
         elif action == "normalize_velocity":
-            # Shift burst transactions to 5 hours ago so they fall outside 2-hour window
             cursor.execute("UPDATE transactions SET timestamp = '2026-09-09 12:00:00' WHERE transaction_id LIKE 'TXN-BURST-%'")
             conn.commit()
             assessment = service.assess_transaction("TXN-48291", conn)

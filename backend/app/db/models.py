@@ -93,3 +93,49 @@ class TimelineEvent:
     description: str
     category: str
     severity: str
+
+@dataclass
+class InvestigationSession:
+    investigation_id: str
+    root_id: str
+    root_type: str
+    title: str
+    created_at: str
+    status: str = "OPEN"
+
+@dataclass
+class InvestigationNote:
+    id: int
+    investigation_id: str
+    note_text: str
+    author: str
+    created_at: str
+
+@dataclass
+class InvestigationFinding:
+    id: int
+    investigation_id: str
+    item_type: str
+    item_id: str
+    label: str
+    is_important: bool
+    reason: Optional[str]
+    added_at: str
+
+@dataclass
+class InvestigationEvidence:
+    id: int
+    investigation_id: str
+    title: str
+    details: str
+    source: str
+    timestamp: str
+
+@dataclass
+class InvestigationAuditLog:
+    id: int
+    investigation_id: str
+    action_type: str
+    entity_id: Optional[str]
+    details: str
+    timestamp: str
